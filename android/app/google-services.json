@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "194877359566",
+    "project_id": "moversec-ae404",
+    "storage_bucket": "moversec-ae404.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:194877359566:android:2829364312ae5fe98ad79f",
+        "android_client_info": {
+          "package_name": "com.example.moversec"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAS-ZoTlS3f6Yd-CNf8JkKvSFLzGUOX4lA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

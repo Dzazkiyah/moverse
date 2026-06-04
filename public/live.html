@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Live Tracking - Moverse</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, sans-serif; background: #EAF7FB; }
+    .header {
+      background: linear-gradient(135deg, #0ABFDB, #00E5A0);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header h1 { color: white; font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+    .header .logo {
+      width: 32px; height: 32px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .status-bar {
+      background: white;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #9CA3AF;
+      margin-right: 8px;
+      display: inline-block;
+    }
+    .status-dot.active { background: #00E5A0; animation: pulse 1.5s infinite; }
+    .status-dot.inactive { background: #EF4444; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .status-text { font-size: 13px; font-weight: 600; color: #0A1628; }
+    .last-update { font-size: 11px; color: #9CA3AF; }
+    #map { width: 100%; height: calc(100vh - 140px); }
+    .loading {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: calc(100vh - 140px);
+      gap: 16px;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid #D6EEF7;
+      border-top-color: #0ABFDB;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading p { color: #9CA3AF; font-size: 14px; }
+    .offline-banner {
+      display: none;
+      background: #FEF3C7;
+      color: #92400E;
+      text-align: center;
+      padding: 10px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+  </style>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">🏃</div>
+    <h1>MOVERSE</h1>
+  </div>
+  <div class="status-bar">
+    <div style="display:flex;align-items:center">
+      <span class="status-dot" id="status-dot"></span>
+      <span class="status-text" id="status-text">Menghubungkan...</span>
+    </div>
+    <span class="last-update" id="last-update">—</span>
+  </div>
+  <div class="offline-banner" id="offline-banner">
+    ⚠️ Sesi lari sudah selesai
+  </div>
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p>Memuat lokasi...</p>
+  </div>
+  <div id="map" style="display:none"></div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js';
+    import { getFirestore, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCb56EjhTmluvW4XRk4smCM24XrYY0yRcM",
+      authDomain: "moversec-ae404.firebaseapp.com",
+      projectId: "moversec-ae404",
+      storageBucket: "moversec-ae404.firebasestorage.app",
+      messagingSenderId: "194877359566",
+      appId: "1:194877359566:web:55a7e3949f7421d58ad79f"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('id');
+
+    const loadingEl = document.getElementById('loading');
+    const mapEl = document.getElementById('map');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const lastUpdateEl = document.getElementById('last-update');
+    const offlineBanner = document.getElementById('offline-banner');
+
+    if (!sessionId) {
+      loadingEl.innerHTML = '<p style="color:#EF4444;font-weight:600">❌ Link tidak valid</p>';
+    } else {
+      loadingEl.style.display = 'none';
+      mapEl.style.display = 'block';
+
+      const map = L.map('map', { zoomControl: true });
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+      }).addTo(map);
+
+      const markerIcon = L.divIcon({
+        html: `<div style="
+          width:40px;height:40px;
+          background:#0ABFDB;
+          border:3px solid white;
+          border-radius:50%;
+          display:flex;align-items:center;justify-content:center;
+          box-shadow:0 0 0 6px rgba(10,191,219,0.25);
+          font-size:18px;
+        ">🏃</div>`,
+        className: '',
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+      });
+
+      let marker = null;
+      let polyline = L.polyline([], { color: '#0ABFDB', weight: 5 }).addTo(map);
+      let firstLoad = true;
+
+      const docRef = doc(db, 'live_sessions', sessionId);
+      onSnapshot(docRef, (snap) => {
+        if (!snap.exists()) {
+          statusText.textContent = 'Sesi tidak ditemukan';
+          return;
+        }
+
+        const data = snap.data();
+        const lat = data.lat;
+        const lng = data.lng;
+        const isActive = data.isActive;
+        const latlng = [lat, lng];
+
+        if (!marker) {
+          marker = L.marker(latlng, { icon: markerIcon }).addTo(map);
+        } else {
+          marker.setLatLng(latlng);
+        }
+
+        polyline.addLatLng(latlng);
+
+        if (firstLoad) {
+          map.setView(latlng, 17);
+          firstLoad = false;
+        } else {
+          map.panTo(latlng);
+        }
+
+        if (isActive) {
+          statusDot.className = 'status-dot active';
+          statusText.textContent = 'Sedang berlari...';
+          offlineBanner.style.display = 'none';
+        } else {
+          statusDot.className = 'status-dot inactive';
+          statusText.textContent = 'Sesi selesai';
+          offlineBanner.style.display = 'block';
+        }
+
+        if (data.lastUpdated) {
+          const d = data.lastUpdated.toDate();
+          lastUpdateEl.textContent = 'Update: ' +
+            d.toLocaleTimeString('id-ID', {
+              hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+        }
+      });
+    }
+  </script>
+</body>
+</html>
