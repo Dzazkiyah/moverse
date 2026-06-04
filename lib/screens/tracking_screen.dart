@@ -665,8 +665,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                                   initialZoom: 17),
                               children: [
                                 TileLayer(
-                                  urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-                                  subdomains: ['a', 'b', 'c'],
+                                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                                   userAgentPackageName: 'com.example.moversec',
                                 ),
                                 if (_routePoints.length > 1)
